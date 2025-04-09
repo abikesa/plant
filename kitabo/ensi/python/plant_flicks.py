@@ -3,10 +3,11 @@
 plant_flicks.py 🌱
 
 Performs the flick ritual:
-- Walks the Git-rooted directory tree starting from shill.
-- Appends symbolic graffiti to existing dotfiles or creates new ones in each folder.
-- Appends to hidden files adjacent to regular files too.
-- Commits each flick individually with a unique message.
+- Walks the Git-rooted directory tree starting from `shill`.
+- Appends symbolic graffiti to:
+    • one dotfile per directory
+    • one hidden dotfile per *file* (e.g., `.index.html.flick`)
+- Commits each flick with a unique message.
 """
 
 import os
@@ -21,9 +22,6 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
 def random_tag():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=4))
 
-def random_filename():
-    return f".{''.join(random.choices(string.ascii_lowercase, k=random.randint(4, 8)))}"
-
 def generate_graffiti():
     timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
     tag = random_tag()
@@ -37,18 +35,13 @@ def find_git_root(start_path):
         current = os.path.dirname(current)
     raise RuntimeError("❌ Git root not found.")
 
-def get_or_create_flick_path(folder):
-    existing = [f for f in os.listdir(folder) if f.startswith('.') and not f.startswith('..')]
-    flicks = [f for f in existing if os.path.isfile(os.path.join(folder, f))]
-    if flicks:
-        return os.path.join(folder, random.choice(flicks))  # Append to existing
-    else:
-        return os.path.join(folder, random_filename())      # Create new
-
-def flick_file(file_path):
-    """Add graffiti to a hidden file adjacent to a normal file."""
-    folder = os.path.dirname(file_path)
-    return get_or_create_flick_path(folder)
+def flick_to_file(target_path, repo_root):
+    graffiti = generate_graffiti()
+    with open(target_path, 'a') as f:
+        f.write(graffiti)
+    rel_path = os.path.relpath(target_path, start=repo_root)
+    git_commit(target_path, f" {rel_path}", repo_root)
+    print(f"✅ {rel_path}")
 
 def git_commit(file_path, message, repo_root):
     try:
@@ -60,40 +53,31 @@ def git_commit(file_path, message, repo_root):
 def plant_flicks(base_dir):
     repo_root = find_git_root(base_dir)
     flicked = 0
-    visited_folders = set()
+    visited_dirs = set()
 
     for root, dirs, files in os.walk(base_dir):
-        # Flick the folder itself (once)
-        if root not in visited_folders:
+        # Flick once per folder
+        if root not in visited_dirs:
+            folder_flick = os.path.join(root, f".{random_tag().lower()}")
             try:
-                flick_path = get_or_create_flick_path(root)
-                with open(flick_path, 'a') as f:
-                    graffiti = generate_graffiti()
-                    f.write(graffiti)
-                rel_path = os.path.relpath(flick_path, start=repo_root)
-                git_commit(flick_path, f" {rel_path}", repo_root)
-                print(f"✅ {rel_path}")
+                flick_to_file(folder_flick, repo_root)
                 flicked += 1
-                visited_folders.add(root)
+                visited_dirs.add(root)
             except Exception as e:
                 print(f"❌ Folder flick failed in {root}: {e}")
 
-        # Now flick adjacent to each file
-        for file in files:
-            file_path = os.path.join(root, file)
+        # Flick once per file
+        for filename in files:
             try:
-                flick_path = flick_file(file_path)
-                with open(flick_path, 'a') as f:
-                    graffiti = generate_graffiti()
-                    f.write(graffiti)
-                rel_path = os.path.relpath(flick_path, start=repo_root)
-                git_commit(flick_path, f" {rel_path}", repo_root)
-                print(f"✅ {rel_path}")
+                full_path = os.path.join(root, filename)
+                basename = os.path.basename(filename)
+                flick_file = os.path.join(root, f".{basename}.flick")
+                flick_to_file(flick_file, repo_root)
                 flicked += 1
             except Exception as e:
-                print(f"❌ File flick failed for {file_path}: {e}")
+                print(f"❌ File flick failed for {filename}: {e}")
 
-    print(f"\n🌿 Ritual complete: {flicked} flicks planted (folders + files).")
+    print(f"\n🌿 Ritual complete: {flicked} flicks planted across folders and files.")
 
 if __name__ == "__main__":
     plant_flicks(BASE_DIR)
